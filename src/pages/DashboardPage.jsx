@@ -26,11 +26,13 @@ import DataExportPanel from '../components/admin/DataExportPanel';
 import RolesPanel from '../components/admin/RolesPanel';
 import SecurityCenterPanel from '../components/admin/SecurityCenterPanel';
 import SearchAnalyticsPanel from '../components/admin/SearchAnalyticsPanel';
+import PaymentsPanel from '../components/admin/PaymentsPanel';
 
 const TABS = [
   { key: 'landlords', label: 'Landlords' },
   { key: 'students', label: 'Students' },
   { key: 'listings', label: 'Listings' },
+  { key: 'payments', label: 'Payments' },
   { key: 'announcements', label: 'Announcements' },
   { key: 'audit-log', label: 'Audit log' },
   { key: 'health', label: 'System health' },
@@ -85,6 +87,7 @@ export default function DashboardPage() {
           {tab === 'landlords' && <PeopleQueue role="landlord" showVerification showDocuments />}
           {tab === 'students' && <PeopleQueue role="student" showVerification />}
           {tab === 'listings' && <ListingQueue />}
+          {tab === 'payments' && <PaymentsPanel />}
           {tab === 'announcements' && <AnnouncementsPanel />}
           {tab === 'audit-log' && <AuditLogPanel />}
           {tab === 'health' && <SystemHealthPanel onNavigate={setTab} />}
