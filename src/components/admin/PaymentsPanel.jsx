@@ -1,15 +1,13 @@
 import { useMemo, useState } from 'react';
 import {
-  Banknote,
-  Smartphone,
-  Landmark,
+  Link2,
   CheckCircle2,
   Clock,
   XCircle,
   AlertOctagon,
   Search,
 } from 'lucide-react';
-import { useAdminPayments, useAdminPayoutDetails } from '../../hooks/usePayments';
+import { useAdminPayments, useAdminConnections } from '../../hooks/usePayments';
 import { useAdminProperties } from '../../hooks/useAdmin';
 
 const STATUS_INFO = {
@@ -23,6 +21,7 @@ const CHANNEL_LABEL = {
   tnm_mpamba: 'TNM Mpamba',
   airtel_money: 'Airtel Money',
   national_bank: 'National Bank',
+  manual: 'Paid directly',
 };
 
 const STATUS_FILTERS = [
@@ -35,14 +34,12 @@ const STATUS_FILTERS = [
 
 const SUB_TABS = [
   { key: 'transactions', label: 'Transactions' },
-  { key: 'payouts', label: 'Payout destinations' },
+  { key: 'connections', label: 'Connected accounts' },
 ];
 
 export default function PaymentsPanel() {
   const [subTab, setSubTab] = useState('transactions');
-  // Shared across both sub-tabs: every property, used to resolve a
-  // propertyId into a name/landlord and to drive the payout-destinations
-  // list (every property needs exactly one PropertyPayoutDetails row).
+  // Resolves a propertyId into a name/lister for the transactions list.
   const { properties } = useAdminProperties({ status: 'all' });
   const propertyMap = useMemo(() => {
     const map = new Map();
@@ -72,7 +69,7 @@ export default function PaymentsPanel() {
       {subTab === 'transactions' ? (
         <TransactionsTab propertyMap={propertyMap} />
       ) : (
-        <PayoutDestinationsTab properties={properties} />
+        <ConnectionsTab />
       )}
     </div>
   );
@@ -81,29 +78,16 @@ export default function PaymentsPanel() {
 // ---------------------------------------------------------------------
 // Transactions — every deposit collected platform-wide, for transparency
 // to admins (and, scoped to their own properties, landlords on their own
-// dashboard). This view never edits a payment, only records that a
-// SUCCESS one has actually been forwarded to the landlord outside the
-// platform (markDisbursed).
+// dashboard). Read-only: deposits are charged on each lister's own
+// PayChangu account and settle straight to them, so there is nothing for
+// an admin to forward or mark.
 // ---------------------------------------------------------------------
 
 function TransactionsTab({ propertyMap }) {
   const [status, setStatus] = useState('');
-  const { payments, total, isLoading, error, markDisbursed, clearError } = useAdminPayments({
+  const { payments, total, isLoading, error } = useAdminPayments({
     status: status || undefined,
   });
-  const [busyId, setBusyId] = useState(null);
-
-  async function handleDisburse(id) {
-    setBusyId(id);
-    clearError();
-    try {
-      await markDisbursed(id);
-    } catch {
-      // error already on state
-    } finally {
-      setBusyId(null);
-    }
-  }
 
   return (
     <div>
@@ -175,22 +159,6 @@ function TransactionsTab({ propertyMap }) {
                   <span className="text-[0.72rem] text-text-muted">
                     {new Date(p.createdAt).toLocaleString()}
                   </span>
-                  {p.status === 'success' &&
-                    (p.disbursedAt ? (
-                      <span className="rounded-full bg-green/15 text-green-dark px-3 py-1.5 text-[0.74rem] font-semibold">
-                        Disbursed {new Date(p.disbursedAt).toLocaleDateString()}
-                      </span>
-                    ) : (
-                      <button
-                        type="button"
-                        disabled={busyId === p.id}
-                        onClick={() => handleDisburse(p.id)}
-                        className="inline-flex items-center gap-1.5 rounded-full bg-ink px-3.5 py-1.5 text-[0.76rem] font-semibold text-text-inverse hover:bg-green-dark transition-colors disabled:opacity-40"
-                      >
-                        <Banknote size={13} strokeWidth={1.8} />
-                        {busyId === p.id ? 'Marking…' : 'Mark disbursed'}
-                      </button>
-                    ))}
                 </div>
               </div>
             );
@@ -202,43 +170,45 @@ function TransactionsTab({ propertyMap }) {
 }
 
 // ---------------------------------------------------------------------
-// Payout destinations — one record per property, admin-only to set or
-// change, shared by every room on that property (see the product
-// decision this mirrors: all rooms on a listing pay out to the same
-// place, and only an admin can change where that is).
+// Connected accounts — which listers have linked their own PayChangu
+// account (PayChangu Connect). Read-only: only the lister can connect or
+// disconnect, so admins can't redirect anyone's money. Tokens are never
+// returned by the API.
 // ---------------------------------------------------------------------
 
-function PayoutDestinationsTab({ properties }) {
-  const { details, isLoading, error, isSaving, save, clearError } = useAdminPayoutDetails();
-  const [search, setSearch] = useState('');
-  const [editing, setEditing] = useState(null); // property object or null
+const CONNECTION_BADGE = {
+  active: { label: 'Connected', color: 'bg-green/15 text-green-dark' },
+  pending: { label: 'Started, not finished', color: 'bg-gold/15 text-gold' },
+  revoked: { label: 'Disconnected', color: 'bg-paper-3 text-text-muted' },
+};
 
-  const detailsByProperty = useMemo(() => {
-    const map = new Map();
-    details.forEach((d) => map.set(d.propertyId, d));
-    return map;
-  }, [details]);
+function ConnectionsTab() {
+  const { connections, isLoading, error } = useAdminConnections();
+  const [search, setSearch] = useState('');
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return properties;
-    return properties.filter(
-      (p) =>
-        p.name?.toLowerCase().includes(q) ||
-        p.landlord?.fullName?.toLowerCase().includes(q) ||
-        p.landlord?.businessName?.toLowerCase().includes(q),
+    if (!q) return connections;
+    return connections.filter(
+      (c) =>
+        c.userName?.toLowerCase().includes(q) || c.accountName?.toLowerCase().includes(q),
     );
-  }, [properties, search]);
+  }, [connections, search]);
 
   return (
     <div>
+      <p className="text-[0.82rem] text-text-muted mb-4 max-w-[620px]">
+        Customers' deposits go straight into the PayChangu account each landlord or agent connects
+        here. Admins can see who is connected but can't change where anyone's money is sent.
+      </p>
+
       <div className="relative max-w-[320px] mb-5">
         <Search size={14} strokeWidth={1.8} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
         <input
           type="text"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search properties or landlords…"
+          placeholder="Search landlords or agents…"
           className="input pl-8 py-2 text-[0.85rem]"
         />
       </div>
@@ -250,238 +220,42 @@ function PayoutDestinationsTab({ properties }) {
       )}
 
       {isLoading ? (
-        <p className="text-[0.9rem] text-text-muted">Loading payout destinations…</p>
+        <p className="text-[0.9rem] text-text-muted">Loading connected accounts…</p>
       ) : filtered.length === 0 ? (
         <div className="rounded-[var(--radius-lg)] border border-dashed border-line-dark px-6 py-14 text-center">
-          <p className="text-[0.95rem] text-text">No properties match this search.</p>
+          <p className="text-[0.95rem] text-text">No connected accounts yet.</p>
         </div>
       ) : (
         <div className="rounded-[var(--radius-lg)] border border-line-dark bg-paper divide-y divide-line-dark overflow-hidden">
-          {filtered.map((p) => {
-            const d = detailsByProperty.get(p.id);
+          {filtered.map((c) => {
+            const badge = CONNECTION_BADGE[c.status] || CONNECTION_BADGE.revoked;
             return (
-              <div key={p.id} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3.5">
+              <div key={c.userId} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3.5">
                 <div className="min-w-0">
-                  <div className="font-display font-semibold text-[0.92rem] text-text">{p.name}</div>
-                  <div className="text-[0.78rem] text-text-muted mt-0.5">
-                    {p.landlord?.businessName || p.landlord?.fullName}
+                  <div className="font-display font-semibold text-[0.92rem] text-text">
+                    {c.userName || c.userId}
                   </div>
-                  {d ? (
-                    <div className="flex items-center gap-1.5 mt-1.5 text-[0.78rem] text-text">
-                      {d.payoutMethod === 'mobile_money' ? (
-                        <Smartphone size={13} strokeWidth={1.8} className="text-green-dark" />
-                      ) : (
-                        <Landmark size={13} strokeWidth={1.8} className="text-green-dark" />
-                      )}
-                      {d.payoutMethod === 'mobile_money'
-                        ? `${CHANNEL_LABEL[d.mobileMoneyProvider] || 'Mobile money'} · ${d.mobileMoneyNumber}`
-                        : `${d.bankName} · ${d.bankAccountNumber}`}
-                    </div>
-                  ) : (
-                    <div className="mt-1.5 text-[0.78rem] text-gold font-semibold">
-                      Not configured — deposits can't be collected yet
-                    </div>
-                  )}
+                  <div className="flex items-center gap-1.5 mt-1 text-[0.78rem] text-text-muted">
+                    <Link2 size={13} strokeWidth={1.8} />
+                    {c.accountName || 'PayChangu account'}
+                    {c.mode === 'test' && <span className="font-mono text-[0.68rem]">(test mode)</span>}
+                  </div>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setEditing(p)}
-                  className="shrink-0 rounded-full border border-line-dark px-3.5 py-1.5 text-[0.78rem] font-semibold text-text hover:bg-paper-2 transition-colors"
-                >
-                  {d ? 'Edit' : 'Set destination'}
-                </button>
+                <div className="flex items-center gap-2 shrink-0">
+                  {c.connectedAt && (
+                    <span className="text-[0.72rem] text-text-muted">
+                      {new Date(c.connectedAt).toLocaleDateString()}
+                    </span>
+                  )}
+                  <span className={`rounded-full px-2.5 py-1 text-[0.7rem] font-semibold ${badge.color}`}>
+                    {badge.label}
+                  </span>
+                </div>
               </div>
             );
           })}
         </div>
       )}
-
-      {editing && (
-        <PayoutDetailsModal
-          property={editing}
-          existing={detailsByProperty.get(editing.id)}
-          isSaving={isSaving}
-          onClose={() => {
-            setEditing(null);
-            clearError();
-          }}
-          onSave={async (payload) => {
-            await save(editing.id, payload);
-            setEditing(null);
-          }}
-        />
-      )}
-    </div>
-  );
-}
-
-function PayoutDetailsModal({ property, existing, isSaving, onClose, onSave }) {
-  const [form, setForm] = useState({
-    payoutMethod: existing?.payoutMethod || 'mobile_money',
-    mobileMoneyProvider: existing?.mobileMoneyProvider || 'tnm_mpamba',
-    mobileMoneyNumber: existing?.mobileMoneyNumber || '',
-    mobileMoneyAccountName: existing?.mobileMoneyAccountName || '',
-    bankName: existing?.bankName || '',
-    bankAccountName: existing?.bankAccountName || '',
-    bankAccountNumber: existing?.bankAccountNumber || '',
-    bankBranch: existing?.bankBranch || '',
-  });
-  const [localError, setLocalError] = useState(null);
-
-  function update(field) {
-    return (e) => setForm((f) => ({ ...f, [field]: e.target.value }));
-  }
-
-  async function handleSubmit(e) {
-    e.preventDefault();
-    setLocalError(null);
-    const payload =
-      form.payoutMethod === 'mobile_money'
-        ? {
-            payoutMethod: 'mobile_money',
-            mobileMoneyProvider: form.mobileMoneyProvider,
-            mobileMoneyNumber: form.mobileMoneyNumber,
-            mobileMoneyAccountName: form.mobileMoneyAccountName,
-            bankBranch: form.bankBranch || undefined,
-          }
-        : {
-            payoutMethod: 'bank',
-            bankName: form.bankName,
-            bankAccountName: form.bankAccountName,
-            bankAccountNumber: form.bankAccountNumber,
-            bankBranch: form.bankBranch || undefined,
-          };
-    try {
-      await onSave(payload);
-    } catch (err) {
-      setLocalError(err.message);
-    }
-  }
-
-  return (
-    <div className="fixed inset-0 z-[90] flex items-center justify-center px-4">
-      <div onClick={onClose} className="absolute inset-0 bg-ink/30 backdrop-blur-[2px]" aria-hidden="true" />
-      <form
-        onSubmit={handleSubmit}
-        className="relative w-full max-w-[460px] rounded-[var(--radius-lg)] bg-paper p-6 shadow-card2 space-y-3.5"
-      >
-        <h3 className="font-display font-semibold text-[1.1rem] text-text">
-          Payout destination — {property.name}
-        </h3>
-        <p className="text-[0.8rem] text-text-muted">
-          Every room on this listing sends its reservation deposit to this same destination.
-          Only an admin can change it.
-        </p>
-
-        {localError && (
-          <div className="text-[0.8rem] text-clay bg-clay/10 border border-clay/20 rounded-lg px-3 py-2">
-            {localError}
-          </div>
-        )}
-
-        <div className="flex gap-2">
-          <button
-            type="button"
-            onClick={() => setForm((f) => ({ ...f, payoutMethod: 'mobile_money' }))}
-            className={`flex-1 inline-flex items-center justify-center gap-1.5 rounded-full border px-3 py-2 text-[0.8rem] font-semibold transition-colors ${
-              form.payoutMethod === 'mobile_money'
-                ? 'border-green-dark bg-green/10 text-green-dark'
-                : 'border-line-dark text-text-muted hover:bg-paper-2'
-            }`}
-          >
-            <Smartphone size={14} strokeWidth={1.8} />
-            Mobile money
-          </button>
-          <button
-            type="button"
-            onClick={() => setForm((f) => ({ ...f, payoutMethod: 'bank' }))}
-            className={`flex-1 inline-flex items-center justify-center gap-1.5 rounded-full border px-3 py-2 text-[0.8rem] font-semibold transition-colors ${
-              form.payoutMethod === 'bank'
-                ? 'border-green-dark bg-green/10 text-green-dark'
-                : 'border-line-dark text-text-muted hover:bg-paper-2'
-            }`}
-          >
-            <Landmark size={14} strokeWidth={1.8} />
-            Bank
-          </button>
-        </div>
-
-        {form.payoutMethod === 'mobile_money' ? (
-          <>
-            <select value={form.mobileMoneyProvider} onChange={update('mobileMoneyProvider')} className="input">
-              <option value="tnm_mpamba">TNM Mpamba</option>
-              <option value="airtel_money">Airtel Money</option>
-            </select>
-            <input
-              type="text"
-              required
-              value={form.mobileMoneyNumber}
-              onChange={update('mobileMoneyNumber')}
-              placeholder="Mobile money number"
-              className="input"
-            />
-            <input
-              type="text"
-              required
-              value={form.mobileMoneyAccountName}
-              onChange={update('mobileMoneyAccountName')}
-              placeholder="Registered account name"
-              className="input"
-            />
-          </>
-        ) : (
-          <>
-            <input
-              type="text"
-              required
-              value={form.bankName}
-              onChange={update('bankName')}
-              placeholder="Bank name"
-              className="input"
-            />
-            <input
-              type="text"
-              required
-              value={form.bankAccountName}
-              onChange={update('bankAccountName')}
-              placeholder="Account name"
-              className="input"
-            />
-            <input
-              type="text"
-              required
-              value={form.bankAccountNumber}
-              onChange={update('bankAccountNumber')}
-              placeholder="Account number"
-              className="input"
-            />
-            <input
-              type="text"
-              value={form.bankBranch}
-              onChange={update('bankBranch')}
-              placeholder="Branch (optional)"
-              className="input"
-            />
-          </>
-        )}
-
-        <div className="flex gap-2.5 pt-1">
-          <button
-            type="button"
-            onClick={onClose}
-            className="flex-1 rounded-full border border-line-dark py-2.5 text-[0.85rem] font-semibold text-text hover:bg-paper-2"
-          >
-            Cancel
-          </button>
-          <button
-            type="submit"
-            disabled={isSaving}
-            className="flex-1 rounded-full bg-ink py-2.5 text-[0.85rem] font-semibold text-text-inverse hover:bg-green-dark disabled:opacity-50"
-          >
-            {isSaving ? 'Saving…' : 'Save destination'}
-          </button>
-        </div>
-      </form>
     </div>
   );
 }

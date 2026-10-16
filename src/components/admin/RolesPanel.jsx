@@ -11,7 +11,7 @@ const ROLE_INFO = {
     // not an aspirational list, this is what the guards enforce today.
     perms: [
       'Verify or reject landlord identity',
-      'Approve or reject listings',
+      'Suspend or deactivate listings that break the rules',
       'Suspend / reactivate any account',
       'Change any user\u2019s role',
       'Post platform-wide announcements',
@@ -20,18 +20,18 @@ const ROLE_INFO = {
   },
   landlord: {
     icon: GraduationCap,
-    label: 'Landlord',
+    label: 'Landlord / Agent',
     color: 'bg-gold/15 text-gold border-gold/25',
     perms: [
       'Create, edit, and delete own listings',
       'Manage rooms on own listings',
       'Accept or reject booking requests',
-      'Upload ID + proof of ownership for review',
+      'Optionally add ID / student ID details to build customer trust',
     ],
   },
-  student: {
+  customer: {
     icon: UserIcon,
-    label: 'Student',
+    label: 'Customer',
     color: 'bg-green/15 text-green-dark border-green/25',
     perms: ['Browse and search listings', 'Request to book a room', 'Cancel a pending request'],
   },
@@ -105,7 +105,7 @@ export default function RolesPanel() {
         </div>
         <select value={role} onChange={(e) => setRole(e.target.value)} className="input w-auto py-2">
           <option value="">All roles</option>
-          <option value="student">Students</option>
+          <option value="customer">Customers</option>
           <option value="landlord">Landlords</option>
           <option value="admin">Admins</option>
         </select>

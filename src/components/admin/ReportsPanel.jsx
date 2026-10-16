@@ -114,7 +114,7 @@ export default function ReportsPanel() {
     const landlords = Object.fromEntries(months.map((m) => [m, 0]));
     users.forEach((u) => {
       const key = monthKey(u.createdAt);
-      if (u.role === 'student' && key in students) students[key] += 1;
+      if (u.role === 'customer' && key in students) students[key] += 1;
       if (u.role === 'landlord' && key in landlords) landlords[key] += 1;
     });
     return months.map((m) => ({
@@ -181,7 +181,7 @@ export default function ReportsPanel() {
                       <div
                         className="h-5 rounded-l-full bg-green-dark"
                         style={{ width: `${Math.max(m.students * 8, m.students > 0 ? 6 : 0)}px` }}
-                        title={`${m.students} students`}
+                        title={`${m.students} customers`}
                       />
                       <div
                         className="h-5 rounded-r-full bg-gold"
@@ -190,14 +190,14 @@ export default function ReportsPanel() {
                       />
                     </div>
                     <div className="w-20 shrink-0 text-right text-[0.74rem] text-text-muted">
-                      {m.students}s · {m.landlords}l
+                      {m.students}c · {m.landlords}l
                     </div>
                   </div>
                 ))}
               </div>
               <div className="flex items-center gap-4 mt-5 pt-4 border-t border-dashed border-line-dark text-[0.76rem] text-text-muted">
                 <span className="inline-flex items-center gap-1.5">
-                  <span className="h-2.5 w-2.5 rounded-full bg-green-dark" /> Students
+                  <span className="h-2.5 w-2.5 rounded-full bg-green-dark" /> Customers
                 </span>
                 <span className="inline-flex items-center gap-1.5">
                   <span className="h-2.5 w-2.5 rounded-full bg-gold" /> Landlords

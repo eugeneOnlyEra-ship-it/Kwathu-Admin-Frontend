@@ -24,7 +24,7 @@ const ACTION_LABEL = {
 const AUDIENCE_OPTIONS = [
   { value: 'all', label: 'Everyone' },
   { value: 'landlords', label: 'Landlords' },
-  { value: 'students', label: 'Students' },
+  { value: 'customers', label: 'Customers' },
   { value: 'unverified-landlords', label: 'Unverified landlords' },
 ];
 

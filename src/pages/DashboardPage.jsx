@@ -3,10 +3,8 @@ import {
   FileText,
   MapPin,
   ShieldCheck,
-  ShieldX,
   Users,
   Building2,
-  Clock,
   Ban,
   RotateCcw,
   Trash2,
@@ -29,9 +27,9 @@ import SearchAnalyticsPanel from '../components/admin/SearchAnalyticsPanel';
 import PaymentsPanel from '../components/admin/PaymentsPanel';
 
 const TABS = [
-  { key: 'landlords', label: 'Landlords' },
-  { key: 'students', label: 'Students' },
-  { key: 'listings', label: 'Listings' },
+  { key: 'landlords', label: 'Landlords & Agents' },
+  { key: 'customers', label: 'Customers' },
+  { key: 'listings', label: 'Places & Locations' },
   { key: 'payments', label: 'Payments' },
   { key: 'announcements', label: 'Announcements' },
   { key: 'audit-log', label: 'Audit log' },
@@ -54,15 +52,15 @@ export default function DashboardPage() {
           Admin
         </div>
         <h1 className="font-display font-semibold text-[1.8rem] text-text mt-1">
-          Review queue
+          Admin console
         </h1>
 
         {stats && (
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-8">
-            <StatCard icon={Users} label="Landlords pending" value={stats.users.pending} />
-            <StatCard icon={Building2} label="Total listings" value={stats.properties.total} />
-            <StatCard icon={Clock} label="Listings pending" value={stats.properties.pending} />
-            <StatCard icon={ShieldCheck} label="Listings approved" value={stats.properties.approved} />
+            <StatCard icon={Users} label="Total users" value={stats.users.total} />
+            <StatCard icon={Users} label="Customers" value={stats.users.customers} />
+            <StatCard icon={Building2} label="Places & Locations" value={stats.properties.total} />
+            <StatCard icon={ShieldCheck} label="Active listings" value={stats.properties.active} />
           </div>
         )}
 
@@ -84,8 +82,8 @@ export default function DashboardPage() {
         </div>
 
         <div className="mt-8">
-          {tab === 'landlords' && <PeopleQueue role="landlord" showVerification showDocuments />}
-          {tab === 'students' && <PeopleQueue role="student" showVerification />}
+          {tab === 'landlords' && <PeopleQueue role="landlord" showDocuments />}
+          {tab === 'customers' && <PeopleQueue role="customer" />}
           {tab === 'listings' && <ListingQueue />}
           {tab === 'payments' && <PaymentsPanel />}
           {tab === 'announcements' && <AnnouncementsPanel />}
@@ -189,26 +187,25 @@ function SearchBox({ value, onChange, placeholder }) {
 }
 
 // ---------------------------------------------------------------------
-// Landlords / Students — shared component, verification actions are
-// landlord-only (students don't go through ID/proof-of-ownership review)
+// Landlords & Agents / Customers — shared component. There is no
+// identity approval anymore (see PRODUCT_DIRECTION.md): admins can see
+// whatever optional ID details a lister supplied, and can suspend or
+// reactivate accounts, but nobody is reviewed or approved.
 // ---------------------------------------------------------------------
 
 const PEOPLE_FILTERS = [
-  { value: 'pending', label: 'Pending' },
-  { value: 'approved', label: 'Approved' },
-  { value: 'rejected', label: 'Rejected' },
+  { value: 'active', label: 'Active' },
   { value: 'suspended', label: 'Suspended' },
-  { value: 'all', label: 'All' },
 ];
 
-function PeopleQueue({ role, showVerification = false, showDocuments = false }) {
-  const [filter, setFilter] = useState('pending');
+function PeopleQueue({ role, showDocuments = false }) {
+  const [filter, setFilter] = useState('active');
   const [searchInput, setSearchInput, search] = useDebouncedSearch();
 
-  const verificationStatus = filter === 'suspended' || filter === 'all' ? 'all' : filter;
+  const verificationStatus = 'all';
   const accountStatus = filter === 'suspended' ? 'suspended' : 'active';
 
-  const { users, isLoading, error, verify, reject, suspend, reactivate, clearError } =
+  const { users, isLoading, error, suspend, reactivate, clearError } =
     useAdminUsers({ role, verificationStatus, accountStatus, search });
   const [busyId, setBusyId] = useState(null);
 
@@ -231,16 +228,16 @@ function PeopleQueue({ role, showVerification = false, showDocuments = false }) 
         <SearchBox
           value={searchInput}
           onChange={setSearchInput}
-          placeholder={`Search ${role}s by name, email, phone…`}
+          placeholder={`Search ${role === 'landlord' ? 'landlords & agents' : 'customers'} by name, email, phone…`}
         />
       </div>
 
       <ErrorBanner message={error} />
 
       {isLoading ? (
-        <p className="text-[0.9rem] text-text-muted">Loading {role}s…</p>
+        <p className="text-[0.9rem] text-text-muted">Loading…</p>
       ) : users.length === 0 ? (
-        <EmptyState text={`No ${role}s match this filter.`} />
+        <EmptyState text="No accounts match this filter." />
       ) : (
         <div className="space-y-4">
           {users.map((u) => {
@@ -255,19 +252,31 @@ function PeopleQueue({ role, showVerification = false, showDocuments = false }) 
                     <div className="font-display font-semibold text-[1.05rem] text-text">
                       {u.businessName || u.fullName}
                     </div>
-                    <span
-                      className={`rounded-full px-2.5 py-0.5 text-[0.68rem] font-semibold capitalize ${STATUS_BADGE[suspended ? 'suspended' : u.verificationStatus]}`}
-                    >
-                      {suspended ? 'Suspended' : u.verificationStatus}
-                    </span>
+                    {suspended && (
+                      <span className="rounded-full px-2.5 py-0.5 text-[0.68rem] font-semibold capitalize bg-paper-3 text-text-muted">
+                        Suspended
+                      </span>
+                    )}
+                    {u.role === 'landlord' && (
+                      <span className="rounded-full px-2.5 py-0.5 text-[0.68rem] font-semibold capitalize bg-green/15 text-green-dark">
+                        {u.listerType === 'agent' ? 'Agent' : 'Landlord'}
+                      </span>
+                    )}
                   </div>
                   <div className="text-[0.82rem] text-text-muted mt-0.5">
                     {u.fullName} · {u.email || u.phone}
                   </div>
                   {showDocuments && (
                     <div className="flex flex-wrap gap-3 mt-3">
-                      <DocLink label="ID document" url={u.idDocumentUrl} />
-                      <DocLink label="Proof of ownership" url={u.proofOfOwnershipUrl} />
+                      <DocLink label="ID image" url={u.idDocumentUrl} />
+                      <DocLink label="Student ID image" url={u.studentIdImageUrl} />
+                      <DocLink label="Proof of ownership (legacy)" url={u.proofOfOwnershipUrl} />
+                    </div>
+                  )}
+                  {showDocuments && (
+                    <div className="text-[0.78rem] text-text-muted mt-2 space-y-0.5">
+                      <div>ID number: {u.idNumber || 'not provided'}</div>
+                      <div>Student ID: {u.studentId || 'not provided'}</div>
                     </div>
                   )}
                 </div>
@@ -285,28 +294,6 @@ function PeopleQueue({ role, showVerification = false, showDocuments = false }) 
                     </button>
                   ) : (
                     <>
-                      {showVerification && u.verificationStatus === 'pending' && (
-                        <>
-                          <button
-                            type="button"
-                            disabled={busyId === u.id}
-                            onClick={() => handle(reject, u.id)}
-                            className="inline-flex items-center gap-1.5 rounded-full border border-line-dark px-4 py-2 text-[0.8rem] font-semibold text-clay hover:bg-clay/10 transition-colors disabled:opacity-40"
-                          >
-                            <ShieldX size={14} strokeWidth={2} />
-                            Reject
-                          </button>
-                          <button
-                            type="button"
-                            disabled={busyId === u.id}
-                            onClick={() => handle(verify, u.id)}
-                            className="inline-flex items-center gap-1.5 rounded-full bg-ink px-4 py-2 text-[0.8rem] font-semibold text-text-inverse hover:bg-green-dark transition-colors disabled:opacity-40"
-                          >
-                            <ShieldCheck size={14} strokeWidth={2} />
-                            Approve
-                          </button>
-                        </>
-                      )}
                       <button
                         type="button"
                         disabled={busyId === u.id}
@@ -348,14 +335,16 @@ function DocLink({ label, url }) {
 // ---------------------------------------------------------------------
 
 const LISTING_FILTERS = [
-  { value: 'pending', label: 'Pending' },
-  { value: 'approved', label: 'Approved' },
-  { value: 'rejected', label: 'Rejected' },
   { value: 'all', label: 'All' },
+  { value: 'approved', label: 'Live' },
+  { value: 'pending', label: 'Pending (legacy)' },
+  { value: 'rejected', label: 'Rejected' },
 ];
 
+// Listings go live immediately now (see PRODUCT_DIRECTION.md), so there is
+// no review queue — 'pending' only matches rows created before the pivot.
 function ListingQueue() {
-  const [filter, setFilter] = useState('pending');
+  const [filter, setFilter] = useState('all');
   const [searchInput, setSearchInput, search] = useDebouncedSearch();
 
   const { properties, isLoading, error, approve, reject, activate, deactivate, remove, clearError } =
@@ -383,15 +372,15 @@ function ListingQueue() {
     <div>
       <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
         <StatusFilterBar options={LISTING_FILTERS} value={filter} onChange={setFilter} />
-        <SearchBox value={searchInput} onChange={setSearchInput} placeholder="Search listings…" />
+        <SearchBox value={searchInput} onChange={setSearchInput} placeholder="Search places & locations…" />
       </div>
 
       <ErrorBanner message={error} />
 
       {isLoading ? (
-        <p className="text-[0.9rem] text-text-muted">Loading listings…</p>
+        <p className="text-[0.9rem] text-text-muted">Loading places…</p>
       ) : properties.length === 0 ? (
-        <EmptyState text="No listings match this filter." />
+        <EmptyState text="No places match this filter." />
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
           {properties.map((p) => (
@@ -489,8 +478,8 @@ function ListingQueue() {
 
 const AUDIENCE_OPTIONS = [
   { value: 'all', label: 'Everyone' },
-  { value: 'landlords', label: 'Landlords' },
-  { value: 'students', label: 'Students' },
+  { value: 'landlords', label: 'Landlords & Agents' },
+  { value: 'customers', label: 'Customers' },
 ];
 
 const emptyAnnouncementForm = { title: '', body: '', audience: 'all', expiresAt: '' };

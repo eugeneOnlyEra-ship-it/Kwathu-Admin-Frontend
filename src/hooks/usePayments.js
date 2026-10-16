@@ -35,46 +35,29 @@ export function useAdminPayments({ status, propertyId, limit = 50 } = {}) {
     });
   }, [refresh]);
 
-  const markDisbursed = useCallback(
-    async (paymentId) => {
-      setError(null);
-      try {
-        await apiJson(`/payments/${paymentId}/disburse`, { method: 'PATCH' });
-        await refresh();
-      } catch (err) {
-        setError(err.message);
-        throw err;
-      }
-    },
-    [refresh],
-  );
-
   return {
     payments,
     total,
     isLoading,
     error,
     refresh,
-    markDisbursed,
     clearError: () => setError(null),
   };
 }
 
-// Every property's payout destination — set once per property, shared by
-// all its rooms (see PropertyPayoutDetails on the backend). Admin-only,
-// used to spot properties that still need a destination configured.
-export function useAdminPayoutDetails() {
-  const [details, setDetails] = useState([]);
+// Which listers have connected their own PayChangu account. Read-only —
+// only a lister can connect or disconnect (see PaymentsController).
+export function useAdminConnections() {
+  const [connections, setConnections] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [isSaving, setIsSaving] = useState(false);
 
   const refresh = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     try {
-      const data = await apiJson('/payments/payout-details');
-      setDetails(data);
+      const data = await apiJson('/payments/connections');
+      setConnections(data);
       return data;
     } catch (err) {
       setError(err.message);
@@ -90,26 +73,5 @@ export function useAdminPayoutDetails() {
     });
   }, [refresh]);
 
-  const save = useCallback(
-    async (propertyId, payload) => {
-      setIsSaving(true);
-      setError(null);
-      try {
-        const saved = await apiJson(`/payments/payout-details/${propertyId}`, {
-          method: 'PUT',
-          body: JSON.stringify(payload),
-        });
-        await refresh();
-        return saved;
-      } catch (err) {
-        setError(err.message);
-        throw err;
-      } finally {
-        setIsSaving(false);
-      }
-    },
-    [refresh],
-  );
-
-  return { details, isLoading, isSaving, error, refresh, save, clearError: () => setError(null) };
+  return { connections, isLoading, error, refresh };
 }

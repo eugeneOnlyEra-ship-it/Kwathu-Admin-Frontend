@@ -249,7 +249,7 @@ export default function SystemHealthPanel({ onNavigate }) {
           ok
           label="Total users"
           value={userStats?.total ?? '—'}
-          sub={userStats ? `${userStats.students} students · ${userStats.landlords} landlords` : ''}
+          sub={userStats ? `${userStats.customers} customers · ${userStats.landlords} landlords` : ''}
         />
       </div>
 
@@ -369,7 +369,7 @@ export default function SystemHealthPanel({ onNavigate }) {
               <TrendBars rows={searchStats.trend} colorKey="count" color="bg-green-dark" />
               <p className="text-[0.74rem] text-text-muted mt-2">
                 {zeroResultRate}% of searches found nothing — worth checking Search Analytics for
-                what students are looking for that isn't listed.
+                what customers are looking for that isn't listed.
               </p>
             </>
           )}
