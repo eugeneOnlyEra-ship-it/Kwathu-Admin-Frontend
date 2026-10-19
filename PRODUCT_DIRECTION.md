@@ -202,3 +202,14 @@ obsolete `property_payout_details` table. (Columns here are camelCase, e.g.
 - 2026-10-16 — Payments reworked to PayChangu Connect (lister-owned
   accounts, direct settlement); admin payout-details control removed.
 - 2026-10-16 — Added manual bank/mobile-money accounts for listers without PayChangu.
+
+## Profile & Settings (consumer app, `/settings`)
+- One page for every signed-in user: profile (name, phone, email, photo, lister/customer fields), Trust & ID (landlords), change/set password, accessibility, data download, help, **sign out** and **delete account**. The header no longer has a Log out button — it links here.
+- Accessibility options (text size, high contrast, reduce motion, underline links, readable font, spacing) are per-device (localStorage), applied before first paint by `utils/accessibility.js`.
+- Self-service API: `PATCH /users/me`, `GET /users/me/security`, `POST /users/me/change-password`, `GET /users/me/export`, `DELETE /users/me` (body: `confirm: "DELETE"` + password if the account has one).
+- Account deletion = anonymise, not erase: row kept with `account_deleted_at` set so other people's booking/payment history stays intact. Blocked while any booking is ACCEPTED; pending bookings are cancelled/declined and the other party notified; a lister's places are deactivated and payment accounts / PayChangu link removed. Admins can't self-delete.
+
+## Registration (simplified)
+- Sign-up asks only: account type (Customer / Business owner), name, email, phone, password (show/hide instead of a confirm field). No ID fields at sign-up — add them later in Settings → Trust & ID.
+- Business owners (role `landlord`) then set up their Places & Locations agency inside the app (`PlacesSetup` on the dashboard → `POST /users/me/places-setup`: Landlord/Agent + optional business name). Sets `places_setup_at`; until then the dashboard shows the setup step. "Start a business" (Business Corner) is a disabled "coming soon" option.
+- Existing landlords: run `scripts/migrate-places-setup.sql` once so they aren't asked to set up again.
