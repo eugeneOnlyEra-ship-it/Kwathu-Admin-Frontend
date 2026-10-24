@@ -135,14 +135,6 @@ export function useAdminProperties({ status = 'pending', search = '' } = {}) {
     [refresh],
   );
 
-  const approve = useCallback(
-    (id) => runAction(() => apiJson(`/properties/${id}/approve`, { method: 'POST' })),
-    [runAction],
-  );
-  const reject = useCallback(
-    (id) => runAction(() => apiJson(`/properties/${id}/reject`, { method: 'POST' })),
-    [runAction],
-  );
   const activate = useCallback(
     (id) => runAction(() => apiJson(`/properties/${id}/activate`, { method: 'POST' })),
     [runAction],
@@ -163,8 +155,6 @@ export function useAdminProperties({ status = 'pending', search = '' } = {}) {
     isLoading,
     error,
     refresh,
-    approve,
-    reject,
     activate,
     deactivate,
     remove,

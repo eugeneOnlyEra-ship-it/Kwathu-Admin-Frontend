@@ -257,12 +257,6 @@ export default function SystemHealthPanel({ onNavigate }) {
           something about this specific number". */}
       <div className="mt-4 space-y-2.5">
         <ActionCallout
-          count={propertyStats?.pending ?? 0}
-          label="listings waiting for approval"
-          actionLabel="Review listings"
-          onAction={() => onNavigate?.('listings')}
-        />
-        <ActionCallout
           count={pendingLandlordsCount ?? 0}
           label="landlords waiting for identity verification"
           actionLabel="Review landlords"

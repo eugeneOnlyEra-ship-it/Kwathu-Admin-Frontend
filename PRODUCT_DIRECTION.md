@@ -72,11 +72,14 @@ visibility, or approval.
    no guard changes needed for this.
 2. **Listing content approval is removed too**, not just identity.
    `PropertiesService.create()` sets a listing live (`APPROVED`)
-   immediately. The `PropertyStatus` enum/column and the `approve()`/
-   `reject()` admin methods are kept in place as a dormant manual
-   override an admin can still reach for (e.g. to pull a bad listing),
-   but nothing is ever created `PENDING` anymore and there is no
-   approval queue to work through.
+   immediately. The `PropertyStatus` enum/column is kept (old rows may
+   still carry it), but nothing is ever created `PENDING` anymore and
+   there is no approval queue to work through. *(Update 2026-10-21: the
+   dormant `POST /properties/:id/approve` and `/reject` routes and their
+   service methods were removed so nobody builds on them by mistake. To
+   pull a bad listing, an admin uses Deactivate or Delete. Run
+   `scripts/migrate-pivot.sql` once so any leftover `pending` rows
+   become `approved`.)*
 3. **Rename is cosmetic only.** `Property`/`Room`/`Booking`/`Payment`
    stay as the internal entity, table, route, and DTO names — the
    payments module is built directly on top of these and a schema-level
@@ -193,6 +196,96 @@ obsolete `property_payout_details` table. (Columns here are camelCase, e.g.
 - Earlier audit findings are still deferred.
 - Business Corner: not scoped — needs its own decision log when started.
 
+## Platform role, trust, messaging, receipts (decided 2026-10-21)
+
+**Kwathu is a hosting platform, not a payments party.** Listers list;
+customers find them. Deposits go straight to the lister (PayChangu
+Connect or a manual account), so **Kwathu does not issue refunds and does
+not settle payment disputes.** This is said plainly wherever a customer is
+about to commit (bookings page, payment window, receipts, property page)
+via `PlatformNotice`. Nothing in the code promises, tracks or processes
+refunds. When a payment lands for a booking that has already closed, both
+people are told what happened and that they must sort it out directly
+(`PAYMENT_ROOM_TAKEN` notification) — no money is moved by the platform.
+
+**Caution for "mysterious" listers.** Listers choose what to share in
+Trust & ID. Kwathu checks none of it, so the UI never says "verified".
+`listerTransparency()` (`kwathu-frontend/src/utils/listerTrust.js`) reads
+only fields already public on the listing: ID on file, profile photo, a
+real full name, business/agency name. ID on file → no warning. No ID and
+at most one other detail → `limited` (clear caution + practical steps).
+No ID but two or more details → `partial` (gentle note). Shown on the
+listing page, in the payment window, and as a "Limited details" chip.
+Wording is neutral on purpose: *has not shared*, never *is suspicious*.
+
+**Booking lifecycle: unchanged**, except one rule made explicit.
+Accepting a request does **not** reserve the room; a lister may accept
+several customers for the same room. **The first deposit the lister
+verifies (or PayChangu confirms) wins**, inside one transaction that
+locks the room row (so two simultaneous verifications cannot both win):
+- every other open request for that room — pending *and* accepted-unpaid
+  — is closed (`EXPIRED`, `closedReason = room_taken`);
+- their in-flight payment attempts are cancelled (`Payment.EXPIRED`);
+- each of those customers gets an alert (their card flips live, an open
+  payment window closes itself with an explanation) and the lister gets
+  one summary notification.
+Requests for *other rooms* of the same place are untouched. Deposits can
+only be verified for room-based bookings, so "per room" is complete.
+The UI says all of this up front: customers see "Accepted doesn't mean
+reserved" and how many others are on the clock for the room
+(`otherHoldsOnRoom`, a count only — never who); listers are warned before
+accepting a second request for a room that already has an accepted hold.
+
+**Receipts.** Issued automatically when a deposit is verified (PayChangu
+webhook or the lister's manual confirmation), one per booking, numbered
+`KW-<year>-<6 digits>` from a database sequence. Everything on it is
+copied in at issue time so it never changes. Visible to **both** the
+customer and the lister (`GET /receipts`, `/receipts/:id`,
+`/receipts/:id/pdf`, `/receipts/booking/:bookingId`); anyone else gets
+404. A paid booking missing its receipt gets one on demand. The PDF
+(pdfkit) states that Kwathu does not hold or refund the money.
+
+**Receipt audit trail (admin).** Every receipt is recorded for the admin
+in three ways: (1) a `receipt.issued` entry in the audit log — actor is the
+lister when they marked a manual deposit as received, or "System" when
+PayChangu confirmed it, with receipt number, amount, booking, customer,
+lister and fingerprint in its metadata; written exactly once per receipt,
+even under concurrent issues; (2) the admin app's **Receipts** tab
+(`GET /receipts/admin`): every receipt on the platform, searchable by
+receipt no./customer/lister/place/reference, filterable by who verified it
+and by date, with totals for the current filter and the exact PDF copy
+(`GET /receipts/:id/pdf` — byte-for-byte what the customer and lister
+download, because the PDF dates are pinned to the issue time); (3) a
+**tamper-evidence fingerprint** — SHA-256 over every field on the receipt,
+stored at issue time (`receipts.content_hash`, also copied into the audit
+entry). Each row is re-checked on read (`Intact` / `Altered` / `Not
+signed`), and `GET /receipts/admin/verify` re-checks the whole table and
+names any altered receipt. Nothing in the app edits or deletes a receipt
+(no such routes exist); the fingerprint is what shows if someone edits the
+database directly. Receipts issued before fingerprints existed show "Not
+signed" rather than a false "Intact". The older admin dashboard inside
+the consumer app (`/admin-dashboard`) has no Receipts tab (it also lacks
+Payments); it only gained the readable audit-log labels.
+
+**Messaging.** Customers message the lister of a place in-app
+(`/messages`) — one thread per customer/lister pair, optional "About:
+<place>" tag per message — or via WhatsApp if the lister listed a number
+(`User.whatsappNumber`, set in Settings → Profile; normalised to
+`+265…`; wiped when an account is deleted). Realtime is Server-Sent
+Events (`GET /messages/stream?token=`), same approach as notifications;
+a client that reconnects re-fetches what it missed. Only the two people in
+a thread can read it; **admins cannot**. Listers reply but cannot start
+chats. Messages render as plain text (never HTML). Single backend
+instance assumed for the live push (see below).
+
+**Production database.** Run `scripts/migrate-messaging-receipts.sql`
+(idempotent) before deploying; development auto-syncs.
+
+**Known limits.** Live push (messages, notifications, maintenance) is
+in-memory, so it assumes one backend instance — several would need Redis
+pub/sub. There is no report/block for chat yet. Cloudinary images of a
+deleted account are not removed (no public ids stored).
+
 ## Status log
 
 - 2026-10-14 — Direction pivot agreed with the user; this document
@@ -202,6 +295,18 @@ obsolete `property_payout_details` table. (Columns here are camelCase, e.g.
 - 2026-10-16 — Payments reworked to PayChangu Connect (lister-owned
   accounts, direct settlement); admin payout-details control removed.
 - 2026-10-16 — Added manual bank/mobile-money accounts for listers without PayChangu.
+- 2026-10-21 — Removed property approve/reject routes; room-contest rule
+  (first verified deposit wins, rivals closed + alerted); receipts;
+  in-app realtime messaging + WhatsApp contact; lister-transparency
+  caution; "no refunds" stance made explicit in the UI. Also fixed:
+  system audit entries were silently dropped (actor id `'system'` is not
+  a UUID); the Settings profile form wiped business name / lister type on
+  save after a reload.
+
+- 2026-10-23 — Admin receipt audit trail: `receipt.issued` audit entries,
+  Receipts tab, PDF copy, tamper-evidence fingerprint + verify-all. Also
+  fixed a pagination reset in the new panel (a search debounce timer sent
+  the admin back to page 1).
 
 ## Profile & Settings (consumer app, `/settings`)
 - One page for every signed-in user: profile (name, phone, email, photo, lister/customer fields), Trust & ID (landlords), change/set password, accessibility, data download, help, **sign out** and **delete account**. The header no longer has a Log out button — it links here.

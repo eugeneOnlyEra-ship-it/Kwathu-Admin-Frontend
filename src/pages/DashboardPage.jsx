@@ -25,12 +25,14 @@ import RolesPanel from '../components/admin/RolesPanel';
 import SecurityCenterPanel from '../components/admin/SecurityCenterPanel';
 import SearchAnalyticsPanel from '../components/admin/SearchAnalyticsPanel';
 import PaymentsPanel from '../components/admin/PaymentsPanel';
+import ReceiptsPanel from '../components/admin/ReceiptsPanel';
 
 const TABS = [
   { key: 'landlords', label: 'Landlords & Agents' },
   { key: 'customers', label: 'Customers' },
   { key: 'listings', label: 'Places & Locations' },
   { key: 'payments', label: 'Payments' },
+  { key: 'receipts', label: 'Receipts' },
   { key: 'announcements', label: 'Announcements' },
   { key: 'audit-log', label: 'Audit log' },
   { key: 'health', label: 'System health' },
@@ -86,6 +88,7 @@ export default function DashboardPage() {
           {tab === 'customers' && <PeopleQueue role="customer" />}
           {tab === 'listings' && <ListingQueue />}
           {tab === 'payments' && <PaymentsPanel />}
+          {tab === 'receipts' && <ReceiptsPanel />}
           {tab === 'announcements' && <AnnouncementsPanel />}
           {tab === 'audit-log' && <AuditLogPanel />}
           {tab === 'health' && <SystemHealthPanel onNavigate={setTab} />}
@@ -347,7 +350,7 @@ function ListingQueue() {
   const [filter, setFilter] = useState('all');
   const [searchInput, setSearchInput, search] = useDebouncedSearch();
 
-  const { properties, isLoading, error, approve, reject, activate, deactivate, remove, clearError } =
+  const { properties, isLoading, error, activate, deactivate, remove, clearError } =
     useAdminProperties({ status: filter, search });
   const [busyId, setBusyId] = useState(null);
 
@@ -414,54 +417,31 @@ function ListingQueue() {
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2 mt-4 pt-3 border-t border-dashed border-line-dark">
-                  {p.status === 'pending' ? (
-                    <>
-                      <button
-                        type="button"
-                        disabled={busyId === p.id}
-                        onClick={() => handle(reject, p.id)}
-                        className="flex-1 rounded-full border border-line-dark px-3 py-2 text-[0.78rem] font-semibold text-clay hover:bg-clay/10 transition-colors disabled:opacity-40"
-                      >
-                        Reject
-                      </button>
-                      <button
-                        type="button"
-                        disabled={busyId === p.id}
-                        onClick={() => handle(approve, p.id)}
-                        className="flex-1 rounded-full bg-ink px-3 py-2 text-[0.78rem] font-semibold text-text-inverse hover:bg-green-dark transition-colors disabled:opacity-40"
-                      >
-                        Approve
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      <button
-                        type="button"
-                        disabled={busyId === p.id}
-                        onClick={() => handle(p.isActive ? deactivate : activate, p.id)}
-                        className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-full border border-line-dark px-3 py-2 text-[0.78rem] font-semibold text-text hover:bg-paper-2 transition-colors disabled:opacity-40"
-                      >
-                        {p.isActive ? (
-                          <>
-                            <EyeOff size={13} strokeWidth={1.8} /> Deactivate
-                          </>
-                        ) : (
-                          <>
-                            <Eye size={13} strokeWidth={1.8} /> Activate
-                          </>
-                        )}
-                      </button>
-                      <button
-                        type="button"
-                        disabled={busyId === p.id}
-                        onClick={() => handleRemove(p)}
-                        title="Delete listing"
-                        className="inline-flex items-center justify-center h-9 w-9 rounded-full border border-line-dark text-text-muted hover:bg-clay/10 hover:text-clay transition-colors disabled:opacity-40"
-                      >
-                        <Trash2 size={14} strokeWidth={1.8} />
-                      </button>
-                    </>
-                  )}
+                    <button
+                      type="button"
+                      disabled={busyId === p.id}
+                      onClick={() => handle(p.isActive ? deactivate : activate, p.id)}
+                      className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-full border border-line-dark px-3 py-2 text-[0.78rem] font-semibold text-text hover:bg-paper-2 transition-colors disabled:opacity-40"
+                    >
+                      {p.isActive ? (
+                        <>
+                          <EyeOff size={13} strokeWidth={1.8} /> Deactivate
+                        </>
+                      ) : (
+                        <>
+                          <Eye size={13} strokeWidth={1.8} /> Activate
+                        </>
+                      )}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={busyId === p.id}
+                      onClick={() => handleRemove(p)}
+                      title="Delete listing"
+                      className="inline-flex items-center justify-center h-9 w-9 rounded-full border border-line-dark text-text-muted hover:bg-clay/10 hover:text-clay transition-colors disabled:opacity-40"
+                    >
+                      <Trash2 size={14} strokeWidth={1.8} />
+                    </button>
                 </div>
               </div>
             </div>
@@ -670,7 +650,7 @@ function AnnouncementsPanel() {
 // Audit log
 // ---------------------------------------------------------------------
 
-const AUDIT_TARGET_TYPES = ['user', 'property', 'room', 'announcement'];
+const AUDIT_TARGET_TYPES = ['user', 'property', 'room', 'announcement', 'receipt', 'payment', 'booking'];
 
 const AUDIT_ACTION_LABEL = {
   'user.verified': 'Account verified',
@@ -679,6 +659,10 @@ const AUDIT_ACTION_LABEL = {
   'user.reactivated': 'User reactivated',
   'property.approved': 'Listing approved',
   'property.rejected': 'Listing rejected',
+  'receipt.issued': 'Receipt issued',
+  'payment.manual_confirmed': 'Deposit marked as received',
+  'payment.succeeded_but_booking_unavailable': 'Payment arrived for a closed booking',
+  'booking.expired_by_rival_payment': 'Request closed — room taken',
   'room.created': 'Room created',
   'room.updated': 'Room updated',
   'room.deleted': 'Room deleted',
